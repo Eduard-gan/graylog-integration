@@ -1,0 +1,66 @@
+version: '2'
+
+volumes:
+  mongo_data:
+    driver: local
+  es_data:
+    driver: local
+  graylog_journal:
+    driver: local
+  broker_persist:
+    driver: local
+
+services:
+  app:
+    build: .
+    container_name: app
+    hostname: app
+    restart: always
+    depends_on:
+      - graylog
+
+  broker:
+    image: rabbitmq:3.7-management
+    container_name: broker
+    hostname: broker
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - broker_persist:/var/lib/rabbitmq
+    env_file: global_env
+
+  mongodb:
+    image: mongo:3
+    volumes:
+      - mongo_data:/data/db
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.8.2
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    environment:
+      - http.host=0.0.0.0
+      - transport.host=localhost
+      - network.host=0.0.0.0
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    mem_limit: 1g
+
+  graylog:
+    image: graylog/graylog:3.1
+    volumes:
+      - graylog_journal:/usr/share/graylog/data/journal
+    env_file: global_env
+    links:
+      - mongodb:mongo
+      - elasticsearch
+    depends_on:
+      - broker
+      - mongodb
+      - elasticsearch
+    ports:
+      - 9000:9000
